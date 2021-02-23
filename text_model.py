@@ -4,6 +4,10 @@ import numpy as np
 import torch
 
 class SimpleVocab(object):
+    """
+    词汇表类：输入多句子的篇章，使用add_text_to_vocab形成单词本\n
+    然后输入句子使用encode_text将每个单词(字)编码为一个数字，最终返回句子对应的数字列表
+    """
 
     def __init__(self):
         super(SimpleVocab, self).__init__()
@@ -63,6 +67,9 @@ class SimpleVocab(object):
 
     
 class TextLSTMModel(torch.nn.Module):
+    """
+    LSTM模型
+    """
     def __init__(self, 
                     texts_to_build_vocab, 
                     word_embed_dim=512, 
@@ -77,4 +84,59 @@ class TextLSTMModel(torch.nn.Module):
 
         self.word_embed_dim = word_embed_dim
         self.lstm_hidden_dim = lstm_hidden_dim
+        # embedding第一个参数是单词本的大小，第二个是输出向量的维度
+        # 特别的输入的不同单词数 < 单词本大小，不能大于和等于
+        # 输入 --> 单词的id
         self.embedding_layer = torch.nn.Embedding(vocab_size, word_embed_dim)
+        self.lstm = torch.nn.LSTM(word_embed_dim, lstm_hidden_dim)
+        self.fc_output = torch.nn.Sequential(
+            #  probability of an element to be zeroed. Default: 0.5
+            torch.nn.Dropout(p=0.1),
+            torch.nn.Linear(lstm_hidden_dim, lstm_hidden_dim),
+        )
+
+    def forward(self, x):
+        """input x: list of strings"""
+        if type(x) is list:
+            if type(x[0]) is str or type(x[0]) is unicode:
+                # text是数字列表， x是数字列表的列表
+                x = [self.vocab.encode_text(text) for text in x]
+        assert type(x) is list
+        assert type(x[0]) is list
+        assert type(x[0][0]) is int 
+        return self.forward_encoded_texts(x)
+
+    # texts是数字列表的列表
+    def forward_encoded_texts(self, texts):
+        # to tensor
+        lengths = [len(t) for t in texts]
+        # 加'.long()'是为了使zeros矩阵从浮点类型变成整形
+        itexts = torch.zeros((np.max(lengths), len(texts))).long()
+        # 将texts放入torch.tensor的2维张量中，不足的地方用0占位
+        for i in range(len(texts)):
+            # itexts中每一列对应每个数字列表(即句子的编码)
+            itexts[:lengths[i], i] = torch.tensor(texts[i])
+
+        # embed words
+        itexts = torch.autograd.Variable(itexts).cuda()
+        etexts = self.embedding_layer(itexts)
+
+        # lstm
+        lstm_output, _ = self.forward_lstm_(etexts)
+
+        # get last output (using length)
+        text_features = []
+        for i in range(len(texts)):
+            # 注意此处获取最终输出是用的 “lengths[i] - 1” , 而不是-1, 
+            # 因为itexts中有0占位符, 所以应该取句子长度
+            text_features.append(lstm_output[lengths[i] - 1, i, :])
+
+        # output
+        # torch.stack将tensor的列表链接成为 "tensor的tensor"
+        text_features = torch.stack(text_features)
+        text_features = self.fc_output(text_features)
+        
+        return text_features
+
+    def forward_lstm_(self, etexts):
+        return None
