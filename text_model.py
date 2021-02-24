@@ -132,11 +132,17 @@ class TextLSTMModel(torch.nn.Module):
             text_features.append(lstm_output[lengths[i] - 1, i, :])
 
         # output
-        # torch.stack将tensor的列表链接成为 "tensor的tensor"
+        # torch.stack将tensor的列表链接成为 "tensor的tensor"， 即将列表中的tensor也链接成tensor
         text_features = torch.stack(text_features)
         text_features = self.fc_output(text_features)
         
         return text_features
 
     def forward_lstm_(self, etexts):
-        return None
+        batch_size = etexts.shape[1]
+        # first_hidden[0]是用来初始化隐藏值， first_hidden[1]是用来初始化状态值
+        first_hidden = (torch.zeros(1, batch_size, self.lstm_hidden_dim),
+                        torch.zeros(1, batch_size, self.lstm_hidden_dim))
+        first_hidden = (first_hidden[0].cuda(), first_hidden[1].cuda())
+        lstm_output, last_hidden = self.lstm(etexts, first_hidden)
+        return lstm_output, last_hidden
