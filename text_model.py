@@ -16,7 +16,7 @@ class SimpleVocab(object):
         # Maybe UNK means 'unkown'
         # word2id表示某个单词的id, 单词唯一标识, wordcount表示该单词出现次数
         self.word2id['<UNK>'] = 0
-        self.wordcount['UNK'] = 9e9
+        self.wordcount['<UNK>'] = 9e9
 
     def tokenize_text(self, text):
         """
@@ -41,6 +41,7 @@ class SimpleVocab(object):
         tokens = self.tokenize_text(text)
         for token in tokens:
             if token not in self.word2id:
+                # word2id[token]的值
                 self.word2id[token] = len(self.word2id)
                 self.wordcount[token] = 0
             self.wordcount[token] += 1
@@ -87,13 +88,15 @@ class TextLSTMModel(torch.nn.Module):
         # embedding第一个参数是单词本的大小，第二个是输出向量的维度
         # 特别的输入的不同单词数 < 单词本大小，不能大于和等于
         # 输入 --> 单词的id
-        self.embedding_layer = torch.nn.Embedding(vocab_size, word_embed_dim)
-        self.lstm = torch.nn.LSTM(word_embed_dim, lstm_hidden_dim)
+        self.embedding_layer = torch.nn.Embedding(vocab_size, word_embed_dim).cuda()
+        self.lstm = torch.nn.LSTM(word_embed_dim, lstm_hidden_dim).cuda()
         self.fc_output = torch.nn.Sequential(
             #  probability of an element to be zeroed. Default: 0.5
             torch.nn.Dropout(p=0.1),
             torch.nn.Linear(lstm_hidden_dim, lstm_hidden_dim),
-        )
+        ).cuda()
+        # 如果模型用cuda()，那么数据也要cuda()
+        # 如果数据cuda()，那么模型也要cuda()
 
     def forward(self, x):
         """input x: list of strings"""
@@ -141,6 +144,7 @@ class TextLSTMModel(torch.nn.Module):
     def forward_lstm_(self, etexts):
         batch_size = etexts.shape[1]
         # first_hidden[0]是用来初始化隐藏值， first_hidden[1]是用来初始化状态值
+        # fistr_hidden[0]中， 第一维是lstm层数， 第二维是序列长度， 第三维是每个层的神经元个数
         first_hidden = (torch.zeros(1, batch_size, self.lstm_hidden_dim),
                         torch.zeros(1, batch_size, self.lstm_hidden_dim))
         first_hidden = (first_hidden[0].cuda(), first_hidden[1].cuda())
