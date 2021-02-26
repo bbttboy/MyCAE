@@ -5,15 +5,18 @@ import torchvision
 def pairwise_distances(x, y=None):
     """
     Input: x is a Nxd matrix
-           y is an optional Mxd matri
+           y is an optional Mxd matrix
     Output: dist is a NxM matrix where dist[i,j] is the square norm between
     x[i,:] and y[j,:]
             if y is not given then use 'y=x'.
     i.e. dist[i,j] = ||x[i,:]-y[j,:]||^2
     """
 
+    # view的作用类似reshape
+    # 如果不关心底层数据是否使用了新的内存，则使用reshape方法替代view更方便
     x_norm = (x**2).sum(1).view(-1, 1)
     if y is not None:
+        # transpose把y的0维和1维换位置
         y_t = torch.transpose(y, 0, 1)
         y_norm = (y**2).sum(1).view(1, -1)
     else:
@@ -25,6 +28,64 @@ def pairwise_distances(x, y=None):
     # if y is None:
     #     dist = dist - torch.diag(dist.diag)
     return torch.clamp(dist, 0.0, np.inf)
+
+
+class MyTripletLossFunc(torch.autograd.Function):
+
+    def __init__(self, triplets):
+        super(MyTripletLossFunc, self).__init__()
+        self.triplets = triplets
+        self.triplet_count = len(triplets)
+    
+    def forward(self, features):
+        self.save_for_backward(features)
+
+        self.distances = pairwise_distances(features).cpu().numpy()
+
+        loss = 0.0
+        triplet_count = 0.0
+        correct_count = 0.0
+        for i, j, k in self.triplets:
+            w = 1.0
+            triplet_count += 2
+            loss += w * np.log(1 + np.exp(self.distances[i, j] - self.distances[i, k]))
+            if self.distances[i, j] < self.distances[i, k]:
+                correct_count += 1
+        
+        loss /= triplet_count
+        return torch.FloatTensor((loss, ))
+        
+    def backward(self, grad_output):
+        features, = self.save_tensors
+        features_np = features.cpu().numpy()
+        grad_features = features.clone() * 0.0
+        grad_features_np = grad_features.cup().numpy()
+
+        for i, j, k in self.triplets:
+            w = 1.0
+            f = 1.0 - 1.0 / (1.0 + np.exp(self.distances[i, j] - self.distances[i, k]))
+            grad_features_np[i, :] += w * f * (features_np[i, :] - features_np[j, :]) / self.triplet_count
+            grad_features_np[j, :] += w * f * (features_np[j, :] - features_np[i, :]) / self.triplet_count
+            grad_features_np[i, :] += -w * f * (features_np[i, :] - features_np[k, :]) / self.triplet_count
+            grad_features_np[k, :] += -w * f * (features_np[k, :] - features_np[i, :]) / self.triplet_count
+
+        for i in range(features_np.shape[0]):
+            grad_features[i, :] = torch.from_numpy(grad_features_np[i, :])
+        grad_features = *= float(grad_features.data[0])
+        return grad_features
+
+
+class TripletLoss(torch.nn.Module):
+    """Class for the triplet loss."""
+    def __init__(self, pre_layer=None):
+        super(TripletLoss, self).__init__()
+        self.pre_layer = pre_layer
+
+    def forward(self, x, triplets):
+        if self.pre_layer is not None:
+            x = self.pre_layer(x)
+        loss = MyTripletLossFunc(triplets)(x)
+        return loss
 
 
 class NormalizationLayer(torch.nn.Module):
