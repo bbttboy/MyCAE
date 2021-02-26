@@ -141,6 +141,7 @@ class TextLSTMModel(torch.nn.Module):
         
         return text_features
 
+    # 应该怎么训练这个lstm呢？
     def forward_lstm_(self, etexts):
         batch_size = etexts.shape[1]
         # first_hidden[0]是用来初始化隐藏值， first_hidden[1]是用来初始化状态值
