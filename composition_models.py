@@ -169,4 +169,23 @@ class ConvMapping(torch.nn.Module):
 
     def __init__(self, image_embed_dim=512):
         super().__init__()
+        self.mapping = torch.nn.Sequential(
+            torch.nn.BatchNorm1d(2 * image_embed_dim),
+            torch.nn.ReLU(),
+            torch.nn.Linear(2 * image_embed_dim, image_embed_dim),
+            torch.nn.ReLU(),
+            torch.nn.Linear(image_embed_dim, image_embed_dim),
+        )
+        # Conv1d中kernel_size相当于滑动窗口的大小
+        # in_channels=5, out_channels=64, padding是在输入外加一圈0
+        self.conv = torch.nn.Conv1d(5, 64, kernel_size=3, padding=1)
+        self.adaptivepooling = torch.nn.AdaptiveAvgPool1d(16)
+
+    def forward(self, x):
+        concat_features = torch.cat(x[1:], 1)
+        concat_x = self.conv(concat_features)
+        concat_x = self.adaptivepooling(concat_x)
+        final_vec = concat_x.reshape((concat_x.shape[0], 1024))
+        theta_conv = self.mapping(final_vec)
+        return theta_conv
         
