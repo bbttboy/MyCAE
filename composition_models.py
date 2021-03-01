@@ -74,7 +74,7 @@ class ImgEncoderTextEncoderBase(ImgTextCompositionBase):
 
         # text model
         # 一般没用自写的TextModel，一般还是用bert
-        if !use_bert:
+        if not use_bert:
             self.text_model = text_model.TextLSTMModel(
                 texts_to_build_vocab=text_query,
                 word_embed_dim=text_embed_dim,
