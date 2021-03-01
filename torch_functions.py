@@ -71,7 +71,7 @@ class MyTripletLossFunc(torch.autograd.Function):
 
         for i in range(features_np.shape[0]):
             grad_features[i, :] = torch.from_numpy(grad_features_np[i, :])
-        grad_features = *= float(grad_features.data[0])
+        grad_features *= float(grad_features.data[0])
         return grad_features
 
 
