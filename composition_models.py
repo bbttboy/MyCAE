@@ -74,15 +74,22 @@ class ImgEncoderTextEncoderBase(ImgTextCompositionBase):
 
         # text model
         # 一般没用自写的TextModel，一般还是用bert
-        self.text_model = text_model.TextLSTMModel(
-            texts_to_build_vocab=text_query,
-            word_embed_dim=text_embed_dim,
-            lstm_hidden_dim=text_embed_dim)
+        if !use_bert:
+            self.text_model = text_model.TextLSTMModel(
+                texts_to_build_vocab=text_query,
+                word_embed_dim=text_embed_dim,
+                lstm_hidden_dim=text_embed_dim)
 
     def extract_img_feature(self, imgs):
+        """
+        对应 z = Psi(x), x -- > image
+        """
         return self.img_model(imgs)
 
     def extract_text_feature(self, text_query, use_bert):
+        """
+        对应 q = Beta(t), t --> text
+        """
         if use_bert:
             text_features = bc.encode(text_query)
             return torch.from_numpy(text_features).cuda()
@@ -91,10 +98,13 @@ class ImgEncoderTextEncoderBase(ImgTextCompositionBase):
 
 class ComplexProjectionModule(torch.nn.Module):
     """
-    introduce: 复映射模块
+    introduce: 复映射模块\n
+    即对应 Delta = e{j * Gamma(q)}\n
+    Phi = Deta * Eta(z)
     """
     def __init__(self, image_embed_dim=512, text_embed_dim=768):
         super().__init__()
+        # 此处的bert_features函数对应 Gamma(q)
         self.bert_features = torch.nn.Sequential(
             # BatchNorm1d中参数num_features说明, 即num_features对应 C 或 L
             # C from an expected input of size (N, C, L) or L from input of size (N, L)
@@ -105,6 +115,8 @@ class ComplexProjectionModule(torch.nn.Module):
             torch.nn.Linear(image_embed_dim, image_embed_dim),
             # 最后输出的shape是image_embed_dim
         )
+
+        # 此处的image_features函数对应 Eta(z)
         self.image_features = torch.nn.Sequential(
             torch.nn.BatchNorm1d(image_embed_dim),
             torch.nn.Linear(image_embed_dim, image_embed_dim), 
@@ -115,21 +127,24 @@ class ComplexProjectionModule(torch.nn.Module):
 
         def forward(self, x):
             # x --> (img_features, text_features, CONJUGATE)
-            x1 = self.image_features([0])
-            x2 = self.bert_features(x[1])
+            x1 = self.image_features(x[0])  # x[0]即 z, x1 = Eta(z)
+            x2 = self.bert_features(x[1])  # x[1]即 q, x2 = Gamma(q)
             # default value of CONJUGATE is 1. Only for rotationally symmetric loss value is -1.
             # which results in the CONJUGATE of text features in the complex space
             CONJUGATE = x[2]
             num_samples = x[0].shape[0]
-            CONJUGATE = CONJUGATE[:num_samples]
+            CONJUGATE = CONJUGATE[:num_samples]  # CONJUGATE对应 j
             delta = x2 # text as rotation
+
+            # (re_deta + im_delta) 对应 Delta
             re_delta = torch.cos(delta)
             im_delta = CONJUGATE * torch.sin(delta)
 
+            # (re_score + im_score) 对应 Phi
             re_score = x1 * re_delta
-            im_score = x2 * im_delta
+            im_score = x1 * im_delta
 
-            concat_x = torch.cat([re_score, im_score], 1)
+            concat_x = torch.cat([re_score, im_score], 1)  # 对应 Phi
             # squeeze --> 压缩; 
             # unsqueeze(d) --> d是扩充哪一维
             # 例如: a.shape=(2,3)  a.unsqueeze(-1) --> a.shape=(2, 3, 1)
@@ -139,16 +154,19 @@ class ComplexProjectionModule(torch.nn.Module):
             re_score = re_score.unsqueeze(1)
             im_score = im_score.unsqueeze(1)
 
+            # (Phi, Eta(z), Gamma(q), z, re_Phi, im_Phi)
             return concat_x, x1, x2, x0copy, re_score, im_score
 
 
 class LinearMapping(torch.nn.Module):
     """
-    This is linear mapping to image space. rho(.)
+    This is linear mapping to image space. rho(.)\n
+    即 Rho(Phi)
     """
 
     def __init__(self, image_embed_dim=512):
         super().__init__()
+        # mapping 即 Rho(Phi)
         self.mapping = torch.nn.Sequential(
             torch.nn.BatchNorm1d(2 * image_embed_dim),
             torch.nn.ReLU(),
@@ -164,11 +182,13 @@ class LinearMapping(torch.nn.Module):
 
 class ConvMapping(torch.nn.Module):
     """
-    This is convoultional mapping to image space. rho_conv(.)
+    This is convoultional mapping to image space. rho_conv(.)\n
+    即对应 Rho_conv(Phi, z, q) 
     """
 
     def __init__(self, image_embed_dim=512):
         super().__init__()
+        # mapping + conv + adaptivepooling  即对应 Rho_conv 
         self.mapping = torch.nn.Sequential(
             torch.nn.BatchNorm1d(2 * image_embed_dim),
             torch.nn.ReLU(),
@@ -188,4 +208,70 @@ class ConvMapping(torch.nn.Module):
         final_vec = concat_x.reshape((concat_x.shape[0], 1024))
         theta_conv = self.mapping(final_vec)
         return theta_conv
+
+
+class ComposeAE(ImgEncoderTextEncoderBase):
+    """The ComposeAE model.
+
+    The method is described in
+    Muhammad Umer Anwaar, Egor Labintcev and Martin Kleinsteuber.
+    ``Compositional Learning of Image-Text Query for Image Retrieval"
+    arXiv:2006.11149
+    """
+
+    def __init__(self, text_query, image_embed_dim, text_embed_dim, use_bert, name):
+        super().__init__(text_query, image_embed_dim, text_embed_dim, use_bert, name)
+        self.a = torch.nn.Parameter(torch.tensor([1.0, 10.0, 1.0, 1.0]))
+        self.use_bert = use_bert
+
+        # merged_dim = image_embed_dim + text_embed_dim
+
+        self.encoderLinear = torch.nn.Sequential(
+            ComplexProjectionModule(),
+            LinearMapping(),
+        )
         
+        self.encoderWithConv = torch.nn.Sequential(
+            ComplexProjectionModule(),
+            ConvMapping(),
+        )
+
+        self.decoder = torch.nn.Sequential(
+            torch.nn.BatchNorm1d(image_embed_dim),
+            torch.nn.ReLU(),
+            torch.nn.Linear(image_embed_dim, image_embed_dim),
+            torch.nn.ReLU(),
+            torch.nn.Linear(image_embed_dim, image_embed_dim),
+        )
+
+        self.textdecoder = torch.nn.Sequential(
+            torch.nn.BatchNorm1d(image_embed_dim),
+            torch.nn.ReLU(),
+            torch.nn.Linear(image_embed_dim, text_embed_dim),
+            torch.nn.ReLU(),
+            torch.nn.Linear(text_embed_dim, text_embed_dim),
+        )
+
+    def compose_img_text(self, imgs, text_query):
+        img_features = self.extract_img_feature(imgs)  # z
+        text_features = self.extract_text_feature(text_query, self.use_bert)  # q
+
+        return self.compose_img_text_features(img_features, text_features)
+
+    def compose_img_text_features(self, img_features, text_features, 
+                                    CONJUGATE=Variable(torch.cuda.FloatTensor(32, 1).fill_(1.0), requires_grad=False),):
+        """
+        即对应 Theta = f(z, q) = a * Rho(Phi) + b * Rho_conv(Phi, z, q)
+        """
+        theta_linear = self.encoderLinear((img_features, text_features, CONJUGATE))
+        theta_conv = self.encoderWithConv((img_features, text_features, CONJUGATE))
+        theta = self.a[1] * theta_linear + self.a[0] * theta_conv
+
+        dct_with_representations = {"repres": theta,
+                                    "repr_to_compare_with_source": self.decoder(theta),
+                                    "repr_to_compare_with_mods": self.textdecoder(theta),
+                                    "img_features": img_features,
+                                    "text_features": text_features,
+                                    }
+
+        return dct_with_representations
