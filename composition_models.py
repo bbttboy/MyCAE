@@ -125,37 +125,37 @@ class ComplexProjectionModule(torch.nn.Module):
             torch.nn.Linear(image_embed_dim, image_embed_dim),
         )
 
-        def forward(self, x):
-            # x --> (img_features, text_features, CONJUGATE)
-            x1 = self.image_features(x[0])  # x[0]即 z, x1 = Eta(z)
-            x2 = self.bert_features(x[1])  # x[1]即 q, x2 = Gamma(q)
-            # default value of CONJUGATE is 1. Only for rotationally symmetric loss value is -1.
-            # which results in the CONJUGATE of text features in the complex space
-            CONJUGATE = x[2]
-            num_samples = x[0].shape[0]
-            CONJUGATE = CONJUGATE[:num_samples]  # CONJUGATE对应 j
-            delta = x2 # text as rotation
+    def forward(self, x):
+        # x --> (img_features, text_features, CONJUGATE)
+        x1 = self.image_features(x[0])  # x[0]即 z, x1 = Eta(z)
+        x2 = self.bert_features(x[1])  # x[1]即 q, x2 = Gamma(q)
+        # default value of CONJUGATE is 1. Only for rotationally symmetric loss value is -1.
+        # which results in the CONJUGATE of text features in the complex space
+        CONJUGATE = x[2]
+        num_samples = x[0].shape[0]
+        CONJUGATE = CONJUGATE[:num_samples]  # CONJUGATE对应 j
+        delta = x2 # text as rotation
 
-            # (re_deta + im_delta) 对应 Delta
-            re_delta = torch.cos(delta)
-            im_delta = CONJUGATE * torch.sin(delta)
+        # (re_deta + im_delta) 对应 Delta
+        re_delta = torch.cos(delta)
+        im_delta = CONJUGATE * torch.sin(delta)
 
-            # (re_score + im_score) 对应 Phi
-            re_score = x1 * re_delta
-            im_score = x1 * im_delta
+        # (re_score + im_score) 对应 Phi
+        re_score = x1 * re_delta
+        im_score = x1 * im_delta
 
-            concat_x = torch.cat([re_score, im_score], 1)  # 对应 Phi
-            # squeeze --> 压缩; 
-            # unsqueeze(d) --> d是扩充哪一维
-            # 例如: a.shape=(2,3)  a.unsqueeze(-1) --> a.shape=(2, 3, 1)
-            x0copy = x[0].unsqueeze(1)
-            x1 = x1.unsqueeze(1)
-            x2 = x2.unsqueeze(1)
-            re_score = re_score.unsqueeze(1)
-            im_score = im_score.unsqueeze(1)
+        concat_x = torch.cat([re_score, im_score], 1)  # 对应 Phi
+        # squeeze --> 压缩; 
+        # unsqueeze(d) --> d是扩充哪一维
+        # 例如: a.shape=(2,3)  a.unsqueeze(-1) --> a.shape=(2, 3, 1)
+        x0copy = x[0].unsqueeze(1)
+        x1 = x1.unsqueeze(1)
+        x2 = x2.unsqueeze(1)
+        re_score = re_score.unsqueeze(1)
+        im_score = im_score.unsqueeze(1)
 
-            # (Phi, Eta(z), Gamma(q), z, re_Phi, im_Phi)
-            return concat_x, x1, x2, x0copy, re_score, im_score
+        # (Phi, Eta(z), Gamma(q), z, re_Phi, im_Phi)
+        return concat_x, x1, x2, x0copy, re_score, im_score
 
 
 class LinearMapping(torch.nn.Module):
@@ -228,12 +228,12 @@ class ComposeAE(ImgEncoderTextEncoderBase):
 
         self.encoderLinear = torch.nn.Sequential(
             ComplexProjectionModule(),
-            LinearMapping(),
+            LinearMapping()
         )
         
         self.encoderWithConv = torch.nn.Sequential(
             ComplexProjectionModule(),
-            ConvMapping(),
+            ConvMapping()
         )
 
         self.decoder = torch.nn.Sequential(
