@@ -73,3 +73,29 @@ class Fashion200k(BaseDataset):
         def caption_post_process(s):
             return s.strip().replace('.', 'dotmark').replace(
                 '?', 'questionmark').replace('&', 'andmark').replace('*', 'starmark')
+        
+        for filename in label_files:
+            print('read' + filename)
+            with open(label_path + '/' + filename) as f:
+                lines = f.readlines()
+            for line in lines:
+                line = line.split(' ')
+                img = {
+                    'file_path': line[0],
+                    'detection_score': line[1],
+                    'captions': [caption_post_process(line[2])],
+                    'split': split,
+                    'modifiable': False,
+                }
+                self.imgs += [img]
+        print('Fashion200k: ', len(self.imgs), 'images')
+
+        # generate query for training or testing
+        if split == 'train':
+            self.caption_index_init_()
+        else:
+            self.generate_test_queries_()
+
+    def get_different_word(self, source_caption, target_caption):
+        source_words = source_caption.split()
+        target_words = target_caption.split()
