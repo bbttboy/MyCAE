@@ -89,7 +89,8 @@ class Fashion200k(BaseDataset):
                 img = {
                     'file_path': line[0],
                     'detection_score': line[1],
-                    'captions': [caption_post_process(line[2])],
+                    # captions是指图像的属性，即图像说明文字
+                    'captions': [caption_post_process(line[2])],  
                     'split': split,
                     'modifiable': False,
                 }
@@ -103,6 +104,7 @@ class Fashion200k(BaseDataset):
             self.generate_test_queries_()
 
     def get_different_word(self, source_caption, target_caption):
+        """通过两张图像属性差异的部分，构建replace A to B的形式."""
         source_words = source_caption.split()
         target_words = target_caption.split()
         for source_word in source_words:
@@ -116,10 +118,46 @@ class Fashion200k(BaseDataset):
 
     def generate_test_queries_(self):
         file2imgid = {}
+        # 生成与图片路径对应的id，即第一个图片路径id=0，+1类推
         for i, img in enumerate(self.imgs):
             file2imgid[img['file_path']] = i
         with open(self.img_path + '/test_queries.txt') as f:
             lines = f.readlines()
         self.test_queries = []
         for line in lines:
+            # 从这一句看，test_quries.txt 里面存储的是源图片路径和目标图片路径
             source_file, target_file = line.split()
+            idx = file2imgid[source_file]
+            target_idx = file2imgid[target_file]
+            source_caption = self.imgs[dix]['captions'][0]
+            target_caption = self.imgs[target_idx]['captions'][0]
+            source_word, target_word, mod_str = self.get_different_word(
+                source_caption, target_caption)
+            self.test_queries += [{
+                'source_img_id': idx,
+                'source_caption': source_caption,
+                'target_caption': target_caption,
+                'mod': {
+                    'str': mod_str
+                }
+            }]
+
+    def caption_index_init_(self):
+        """ index caption to generate training query-target example on the fly later"""
+
+        # index caption 2 caption_id and caption 2 image_ids
+        caption2id = {}
+        id2caption = {}
+        caption2imgids = {}
+        for i, img in enumerate(self.imgs):
+            for c in img['caption']:
+                if c not in caption2id:
+                    id2caption[len(caption2id)] = c
+                    caption2id[c] = len(caption2id)
+                    caption2imgids[c] = []
+                caption2imgids[c].append(i)
+            self.caption2imgids = caption2imgids
+            print(len(caption2imgids), 'unique cations')
+
+        # parent captions are 1-word shorter than their children
+        parent2children_captions = {}
