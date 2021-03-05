@@ -62,14 +62,17 @@ class Fashion200k(BaseDataset):
         from os import listdir
         from os.path import isfile
         from os.path import join
+        # 拿到文件夹'D:\DataSet\fashion-200k\labels'内所有的文件路径
         label_files = [
             f for f in listdir(label_path) if isfile(join(label_path, f))
         ]
+        # 筛选包含 split='train' 字符串的文件路径
         label_files = [f for f in label_files if split in f]
 
         # read image info from label files
         self.imgs = []
 
+        # 此处是否需要在转义单词前加一个空格？ 例如：将'dotmark'改为 ' dotmark'
         def caption_post_process(s):
             return s.strip().replace('.', 'dotmark').replace(
                 '?', 'questionmark').replace('&', 'andmark').replace('*', 'starmark')
@@ -79,6 +82,9 @@ class Fashion200k(BaseDataset):
             with open(label_path + '/' + filename) as f:
                 lines = f.readlines()
             for line in lines:
+                # 此处应该是'\t'
+                # 并且captions处貌似应该使用split(' ')   
+                # 不用split()， 直接调用的get_different_word里面会有用split()
                 line = line.split(' ')
                 img = {
                     'file_path': line[0],
@@ -99,3 +105,21 @@ class Fashion200k(BaseDataset):
     def get_different_word(self, source_caption, target_caption):
         source_words = source_caption.split()
         target_words = target_caption.split()
+        for source_word in source_words:
+            if source_word not in target_words:
+                break
+        for target_word in target_words:
+            if target_word not in source_words:
+                break
+        mod_str = 'replace ' + source_word + ' with ' + target_word
+        return source_word, target_word, mod_str 
+
+    def generate_test_queries_(self):
+        file2imgid = {}
+        for i, img in enumerate(self.imgs):
+            file2imgid[img['file_path']] = i
+        with open(self.img_path + '/test_queries.txt') as f:
+            lines = f.readlines()
+        self.test_queries = []
+        for line in lines:
+            source_file, target_file = line.split()
