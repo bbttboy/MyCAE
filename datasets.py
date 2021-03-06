@@ -147,7 +147,8 @@ class Fashion200k(BaseDataset):
         """ index caption to generate training query-target example on the fly later"""
 
         # index caption 2 caption_id and caption 2 image_ids
-        # 给每个图片说明编号，并将相同图片的各个说明的id放在同一个图片说明里
+        # 因为图片说明有许多重复的
+        # 所以给不同的图片说明编号，并将相同图片说明对应的imgid放入对应的列表
         caption2id = {}
         id2caption = {}
         caption2imgids = {}
@@ -162,10 +163,13 @@ class Fashion200k(BaseDataset):
             print(len(caption2imgids), 'unique cations')
 
         # parent captions are 1-word shorter than their children
+        # 产生父词，即只比子词少一个单词
+        # parent2children_captions中的 key --> 父词； value -- > list(所有的子词)
         parent2children_captions = {}
         for c in caption2id.keys():
             for w in c.split():
                 p = c.replace(w, '')
+                # 考虑多个空格时 该句会有问题， 试一试 ' '.join(p.split()).strip()
                 p = p.replace('  ', ' ').strip()
                 if p not in parent2children_captions:
                     parent2children_captions[p] = []
@@ -176,15 +180,39 @@ class Fashion200k(BaseDataset):
         # identify parent captions for each image
         for img in self.imgs:
             img['modifiale'] = False
+            # 父词列表 --> 键值对
             img['parent_captions'] = []
+        # 为每个img字典对象中添加其可以对应的父词
         for p in parent2children_captions:
-            if len(parent2children_captions[p]) >= 2:
-                for c in parent2children_captions[p]:
+            if len(parent2children_captions[p]) >= 2:  # 子词至少有2个，即可以进行修改
+                for c in parent2children_captions[p]:  # c 是 父词p 对应的子词
                     for imgid in caption2imgids[c]:
                         self.imgs[imgid]['modifiable'] = True
                         self.imgs[imgid]['parent_captions'] += [p]
+        
+        # 有父词的img就是可以修改的img
         num_modifiable_imgs = 0
         for img in self.imgs:
             if img['modifiable']:
                 num_modifiable_imgs += 1
         print('Modifiable images ', num_modifiable_imgs)
+    
+    def caption_index_sample_(self, idx):
+        while not self.imgs[idx]['modifiable']:
+            idx = np.random.randint(0, len(self.imgs))
+
+        # find random target images (same parent)
+        img = self.imgs[idx]
+        while True:
+            p = random.choice(img['parent_captions'])
+            c = random.choice(self.parent2children_captions[p])
+            if c not in img['captions']:
+                break
+        target_idx = random.choice(self.caption2imgids[c])
+
+        # find the word difference between query and target (not in parent caption)
+        source_caption = self.imgs[idx]['captions'][0]
+        target_caption = self.imgs[target_idx]['caption'][0]
+        source_word, target_word, mod_str = self.get_different_word(
+            source_caption, target_caption)
+        return idx, target_idx, source_word, target_word, mod_str
