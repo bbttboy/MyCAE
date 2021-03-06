@@ -78,7 +78,7 @@ class Fashion200k(BaseDataset):
                 '?', 'questionmark').replace('&', 'andmark').replace('*', 'starmark')
         
         for filename in label_files:
-            print('read' + filename)
+            print('read: ' + filename)
             with open(label_path + '/' + filename) as f:
                 lines = f.readlines()
             for line in lines:
@@ -90,6 +90,7 @@ class Fashion200k(BaseDataset):
                     'file_path': line[0],
                     'detection_score': line[1],
                     # captions是指图像的属性，即图像说明文字
+                    # 这里有 hervé léger 这样的字体 要注意字符解码，会不会在上面readlines()就需要进行？
                     'captions': [caption_post_process(line[2])],  
                     'split': split,
                     'modifiable': False,
@@ -146,6 +147,7 @@ class Fashion200k(BaseDataset):
         """ index caption to generate training query-target example on the fly later"""
 
         # index caption 2 caption_id and caption 2 image_ids
+        # 给每个图片说明编号，并将相同图片的各个说明的id放在同一个图片说明里
         caption2id = {}
         id2caption = {}
         caption2imgids = {}
@@ -161,3 +163,28 @@ class Fashion200k(BaseDataset):
 
         # parent captions are 1-word shorter than their children
         parent2children_captions = {}
+        for c in caption2id.keys():
+            for w in c.split():
+                p = c.replace(w, '')
+                p = p.replace('  ', ' ').strip()
+                if p not in parent2children_captions:
+                    parent2children_captions[p] = []
+                if c not in parent2children_captions[p]:
+                    parent2children_captions[p].append(c)
+        self.parent2children_captions = parent2children_captions
+
+        # identify parent captions for each image
+        for img in self.imgs:
+            img['modifiale'] = False
+            img['parent_captions'] = []
+        for p in parent2children_captions:
+            if len(parent2children_captions[p]) >= 2:
+                for c in parent2children_captions[p]:
+                    for imgid in caption2imgids[c]:
+                        self.imgs[imgid]['modifiable'] = True
+                        self.imgs[imgid]['parent_captions'] += [p]
+        num_modifiable_imgs = 0
+        for img in self.imgs:
+            if img['modifiable']:
+                num_modifiable_imgs += 1
+        print('Modifiable images ', num_modifiable_imgs)
