@@ -198,6 +198,7 @@ class Fashion200k(BaseDataset):
         print('Modifiable images ', num_modifiable_imgs)
     
     def caption_index_sample_(self, idx):
+        # 此处为True的话，说明对应的每个父词都至少有两个及以上的子词
         while not self.imgs[idx]['modifiable']:
             idx = np.random.randint(0, len(self.imgs))
 
@@ -206,6 +207,7 @@ class Fashion200k(BaseDataset):
         while True:
             p = random.choice(img['parent_captions'])
             c = random.choice(self.parent2children_captions[p])
+            # 限制 c(子词) 不是该图片的描述
             if c not in img['captions']:
                 break
         target_idx = random.choice(self.caption2imgids[c])
@@ -213,6 +215,43 @@ class Fashion200k(BaseDataset):
         # find the word difference between query and target (not in parent caption)
         source_caption = self.imgs[idx]['captions'][0]
         target_caption = self.imgs[target_idx]['caption'][0]
+        # 这样选出来的图片描述就只会有一个单词的差异
         source_word, target_word, mod_str = self.get_different_word(
             source_caption, target_caption)
         return idx, target_idx, source_word, target_word, mod_str
+
+    def get_all_texts(self):
+        texts = []
+        for img in self.imgs:
+            for c in img['captions']:
+                texts.append(c)
+        return texts
+
+    def __len__(self):
+        return len(self.imgs)
+
+    def __getitem__(self, idx):
+        idx, target_idx, source_word, target_word, mod_str = self.caption_index_sample_(idx)
+        out = {}
+        out['source_img_id'] = idx
+        out['source_img_data'] = self.get_img(idx)
+        out['source_caption'] = self.imgs[idx]['captions'][0]
+        out['target_img_id'] = target_idx
+        out['target_img_data'] = self.get_img(target_idx)
+        out['target_caption'] = self.imgs[target_idx]['captions'][0]
+        out['mod'] = {'str': mod_str}
+
+        return out
+
+    def get_img(self, idx, raw_img=False):
+        imp_path = self.img_path + self.imgs[idx]['file_path']
+        with open(img_path, 'rb') as f:
+            img = PIL.Image.open(f)
+            img = img.convert('RGB')
+        # 返回未加工的img
+        if raw_img:
+            return img
+        # 返回转换后的img
+        if self.transform:
+            img = self.transform(img)
+        return img
