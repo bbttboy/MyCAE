@@ -37,6 +37,14 @@ class ImgTextCompositionBase(torch.nn.Module):
                      imgs_target, 
                      soft_triplet_loss=True):
         # dct --> discrete consine transform(离散余弦变换)？
+        """
+        dct_with_representations = {"repres": theta,
+                                    "repr_to_compare_with_source": self.decoder(theta),
+                                    "repr_to_compare_with_mods": self.textdecoder(theta),
+                                    "img_features": img_features,
+                                    "text_features": text_features,
+                                    }
+        """
         dct_with_representations = self.compose_img_text(imgs_query, text_query)
         composed_source_image = self.normalization_layer(dct_with_representations["repres"])
         target_img_features_non_norm = self.extract_img_feature(imgs_target)
