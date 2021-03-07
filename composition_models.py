@@ -31,26 +31,67 @@ class ImgTextCompositionBase(torch.nn.Module):
     def compose_img_text(self, imgs, text_query):
         raise NotImplementedError
 
-    # def compute_loss(self,
-    #                  imgs_query, 
-    #                  text_query, 
-    #                  imgs_target, 
-    #                  soft_triplet_loss=True):
-    #     dct_with_representations = self.compose_img_text(imgs_query, text_query)
-    #     composed_source_image = self.normalization_layer(dct_with_representations["repres"])
-    #     target_img_features_non_norm = self.extract_img_feature(imgs_target)
-    #     target_img_features = self.normalization_layer(target_img_features_non_norm)
-    #     assert (composed_source_image.shape[0] == target_img_features.shape[0] and
-    #             composed_source_image.shape[1] == target_img_features.shape[1])
+    def compute_loss(self,
+                     imgs_query, 
+                     text_query, 
+                     imgs_target, 
+                     soft_triplet_loss=True):
+        # dct --> discrete consine transform(离散余弦变换)？
+        dct_with_representations = self.compose_img_text(imgs_query, text_query)
+        composed_source_image = self.normalization_layer(dct_with_representations["repres"])
+        target_img_features_non_norm = self.extract_img_feature(imgs_target)
+        target_img_features = self.normalization_layer(target_img_features_non_norm)
+        assert (composed_source_image.shape[0] == target_img_features.shape[0] and
+                composed_source_image.shape[1] == target_img_features.shape[1])
+        # Get Rot_Sym_Loss --> Rotational Symmetry Loss(旋转对称损失)
+        # 此处的name取自子类
+        if self.name == 'composeAE':
+            # conjugate --> 共轭
+            CONJUGATE = Variable(torch.cuda.FloatTensor(32, 1).fill_(-1.0), requires_grad=False)
+            conjugate_representations = self.compose_img_text_features(target_img_features_non_norm, 
+                                            dct_with_representations["text_features"],
+                                            CONJUGATE)
+            composed_target_image = self.normalization_layer(conjugate_representations["repres"])
+            source_img_features = self.normalization_layer(dct_with_representations["img_features"]) #img1
+            if soft_triplet_loss:
+                # rot_sym_loss --> Rotational Symmetry Loss --> 旋转对称损失
+                dct_with_representations["rot_sym_loss"] = \
+                    self.compute_soft_triplet_loss_(composed_target_image, source_img_features)
+            else:
+                dct_with_representations["rot_sym_loss"] = \
+                    self.compute_batch_based_classification_loss_(composed_target_image, 
+                                                                  source_img_features)
+        else:  # tirg, RealSpaceConcatAE etc
+            dct_with_representations["rot_sym_loss"] = 0
 
-    #     CONJUGATE = Variable(torch.cuda.FloatTensor(32, 1).fill_(-1.0), requires_grad=False)
-    #     conjugate_representations = self.compose_img_text_features(target_img_features_non_norm, 
-    #                                     dct_with_representations["text_features"],
-    #                                     CONJUGATE)
-    #     composed_target_image = self.normalization_layer(conjugate_representations["repres"])
-    #     source_img_features = self.normalization_layer(dct_with_representations["img_features"]) #img1
+        if soft_triplet_loss:
+            return self.compute_soft_triplet_loss_(composed_source_image, target_img_features), \
+                dct_with_representations
+        else:
+            return self.compute_batch_based_classification_loss_(composed_source_image, target_img_features), \
+                dct_with_representations
+    
+    def compute_soft_triplet_loss_(self, mod_img1, img2):
+        triplets = []
+        labels = list(range(mod_img1.shape[0])) + list(range(img2.shape[0]))
+        for i in range(len(labels)):
+            triplets_i = []
+            for j in range(len(labels)):
+                if labels[i] == labels[j] and i != j:
+                    for k in range(len(labels)):
+                        if labels[i] != labels[k]:
+                            triplets_i.append([i, j, k])
+            np.random.shuffle(triplets_i)
+            triplets += triplets_i[:3]
+        assert (triplets and len(triplets) < 2000)
+        return self.soft_triplet_loss(torch.cat([mod_img1, img2]), triplets)
 
-
+    def compute_batch_based_classification_loss_(self, mod_img1, img2):
+        x = torch.mm(mod_img1, img2.transpose(0, 1))
+        labels = torch.tensor(range(x.shape[0])).long()
+        labels = torch.autograd.Variable(labels).cuda()
+        return F.cross_entropy(x, labels)
+ 
 class ImgEncoderTextEncoderBase(ImgTextCompositionBase):
     """Base class for image and text encoder."""
     def __init__(self, text_query, image_embed_dim, text_embed_dim, use_bert, name):
