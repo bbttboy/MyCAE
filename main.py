@@ -134,6 +134,8 @@ def train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer):
     """Function for train loop"""
     print('Begin training.')
     print(len(trainset.test_queries), len(testset.test_queries))
+    # 将会让程序在开始时花费一点额外时间，为整个网络的每个卷积层搜索最适合它的卷积实现算法，进而实现网络的加速
+    # 适用：适用场景是网络结构固定（不是动态变化的），网络的输入形状（包括 batch size，图片大小，输入的通道）是不变的
     torch.backends.cudnn.benchmark = True
     losses_tracking = {}
     it = 0
@@ -147,15 +149,18 @@ def train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer):
         # show/log stats
         # round(x, n) --> n表示保留小数点后n位(四舍五入)
         # print(x, y, z)的写法可以不管x,y,z是不是str，同时会自动在x,y,z之间加空格
-        print('It', it, 'epoch', epoch, 'Elapsed time', round(time.time() - tic, 4), opt.commet)
+        print('It', it, 'epoch', epoch, 'Elapsed time', round(time.time() - tic, 4), opt.comment)
 
         tic = time.time()
         for loss_name in losses_tracking:
             avg_loss = np.mean(losses_tracking[loss_name][-len(trainloader):])
             print('    Loss', loss_name, round(avg_loss, 4))
             logger.add_scalar(loss_name, avg_loss, it)
+        # 通用api
+        # 通用格式 add_something(tag name, object, iteration number)
         logger.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], it)
         
+        # 回收被销毁了但是没有被释放的循环引用的对象
         if epoch %1 == 0:
             gc.collect()
 
@@ -251,6 +256,11 @@ def train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer):
             total_loss.backward()
             optimizer.step()
 
+        # 在处理大规模数据时或者需要迭代多次耗时很长的任务时
+        # 可以利用Python tqdm模块来显示任务进度条
+        # tqdm使用方法：tqdm.tqdm(可迭代对象) ，括号中的可迭代对象可以是个list,tuple,dict等。
+        # 这里直接使用tqdm没有用tqdm.tqdm是因为 from tqdm import tqdm
+        # 即tqdm只是一个tqdm.py 需要从中 import tqdm函数
         for data in tqdm(trainloader, desc='Training for epoch ' + str(epoch)):
             it += 1
             training_1_iter(data)
