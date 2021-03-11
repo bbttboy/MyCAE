@@ -85,7 +85,7 @@ class Fashion200k(BaseDataset):
                 # 此处应该是'\t'
                 # 并且captions处貌似应该使用split(' ')   
                 # 不用split()， 直接调用的get_different_word里面会有用split()
-                line = line.split(' ')
+                line = line.split('\t')
                 img = {
                     'file_path': line[0],
                     'detection_score': line[1],
@@ -122,6 +122,7 @@ class Fashion200k(BaseDataset):
         # 生成与图片路径对应的id，即第一个图片路径id=0，+1类推
         for i, img in enumerate(self.imgs):
             file2imgid[img['file_path']] = i
+        # test_quries.txt 里面每一行存储应该的是源图片路径和对应目标图片路径
         with open(self.img_path + '/test_queries.txt') as f:
             lines = f.readlines()
         self.test_queries = []
@@ -138,9 +139,7 @@ class Fashion200k(BaseDataset):
                 'source_img_id': idx,
                 'source_caption': source_caption,
                 'target_caption': target_caption,
-                'mod': {
-                    'str': mod_str
-                }
+                'mod': {'str': mod_str},
             }]
 
     def caption_index_init_(self):
