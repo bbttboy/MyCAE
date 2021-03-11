@@ -10,11 +10,20 @@ def test(opt, model, testset):
     # eval()表示不改变网络参数，即只执行评估
     model.eval()
     test_queries = testset.get_test_queries()
+    """
+    test_queries += [{
+                'source_img_id': idx,
+                'source_caption': source_caption,
+                'target_caption': target_caption,
+                'mod': {'str': mod_str},
+            }]
+    """
 
     all_imgs = []
     all_captions = []
     all_queries = []
     all_target_captions = []
+    # 当list为空时，为False
     if test_queries:
         imgs = []
         mods = []
@@ -29,6 +38,8 @@ def test(opt, model, testset):
             if len(imgs) >= opt.batch_size or t is test_queries[-1]:
                 if 'torch' not in str(type(imgs[0])):
                     imgs = [torch.from_numpy(d).float() for d in imgs]
+                # stack需要shape相同
+                # stack把列表形式的tensor组合到tensor形式的tensor
                 imgs = torch.stack(imgs).float()
                 imgs = torch.autograd.Variable(imgs).cuda()
                 dct_with_representations = model.compose_img_text(imgs.cuda(), mods)
@@ -36,11 +47,17 @@ def test(opt, model, testset):
                 all_queries += [f]
                 imgs = []
                 mods = []
+        # concatenate(array, axis=0)
+        # 输入的元素shape要相同
+        # 默认按照迭代器内元素的第一维组合
+        # 例如 a.shape=[2, 3, 4] b.shape=[2, 3, 4]
+        # np.concatenate([a, b]).shape = [4, 3, 4]
         all_queries = np.concatenate(all_queries)
         all_target_captions = [t['target_caption'] for t in test_queries]
 
         # compute all image features
         imgs = []
+        # testset.imgs是所有图像
         for i in tqdm(range(len(testset.imgs))):
             imgs += [testset.get_img(i)]
             if len(imgs) >= opt.batch_size or i == len(testset.imgs) - 1:
@@ -100,7 +117,8 @@ def test(opt, model, testset):
     sims = all_queries.dot(all_imgs.T)
     if test_queries:
         for i, t in enumerate(test_queries):
-            sims[i, t['source_img_id']] -= -10e10  # remove query image
+            sims[i, t['source_img_id']] = -10e10  # remove query image
+    # 返回的从小到大的元素对应的下标
     nn_result = [np.argsort(-sims[i, :])[:110] for i in range(sims.shape[0])]
 
     # compute recalls
