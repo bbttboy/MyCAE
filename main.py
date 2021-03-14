@@ -138,7 +138,7 @@ def train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer):
     # 适用：适用场景是网络结构固定（不是动态变化的），网络的输入形状（包括 batch size，图片大小，输入的通道）是不变的
     torch.backends.cudnn.benchmark = True
     losses_tracking = {}
-    it = 0
+    it = 0  # 迭代次数
     epoch = -1
     tic = time.time()
     l2_loss = torch.nn.MSELoss().cuda()
@@ -161,7 +161,7 @@ def train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer):
         logger.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], it)
         
         # 回收被销毁了但是没有被释放的循环引用的对象
-        if epoch %1 == 0:
+        if epoch % 1 == 0:
             gc.collect()
 
         # test
@@ -232,8 +232,9 @@ def train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer):
                 dec_text_loss = l2_loss(dct_with_representations["repr_to_compare_with_mods"],
                                         dct_with_representations["text_features"])
                 
-                losses += [("L2_loss", loss_weights[1], dec_img_loss.cuda())]
-                losses += [("L2_loss_text", loss_weights[2], dec_text_loss.cuda())]
+                losses += [("L2_loss", loss_weights[1], dec_img_loss.cuda())]  # loss_weight=0.1
+                losses += [("L2_loss_text", loss_weights[2], dec_text_loss.cuda())]  # loss_weight=0.1
+                # loss_weight=0.01
                 losses += [("rot_sym_loss", loss_weights[3], dct_with_representations["rot_sym_loss"].cuda())]
             else:
                 print("Invalid model.", opt.model)
