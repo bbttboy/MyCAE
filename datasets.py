@@ -9,6 +9,7 @@ import torch.utils.data
 import torchvision
 import random
 import warnings
+import pandas as pd
 
 class BaseDataset(torch.utils.data.Dataset):
     """Base class for a dataset."""
@@ -66,7 +67,7 @@ class Fashion200k(BaseDataset):
         label_files = [
             f for f in listdir(label_path) if isfile(join(label_path, f))
         ]
-        # 筛选包含 split='train' 字符串的文件路径
+        # 筛选包含 split='train'或'test' 字符串的文件路径
         label_files = [f for f in label_files if split in f]
 
         # read image info from label files
@@ -79,22 +80,31 @@ class Fashion200k(BaseDataset):
         
         for filename in label_files:
             print('read: ' + filename)
-            with open(label_path + '/' + filename) as f:
-                lines = f.readlines()
-            for line in lines:
-                # 此处应该是'\t'
-                # 并且captions处貌似应该使用split(' ')   
-                # 不用split()， 直接调用的get_different_word里面会有用split()
-                line = line.split('\t')
+            lines = pd.read_table(join(label_path, filename), header=None)
+            for i in range(len(lines)):
                 img = {
-                    'file_path': line[0],
-                    'detection_score': line[1],
+                    'file_path': lines.iloc[i][0],
+                    'detection_score': lines.iloc[i][1],
                     # captions是指图像的属性，即图像说明文字
                     # 这里有 hervé léger 这样的字体 要注意字符解码，会不会在上面readlines()就需要进行？
-                    'captions': [caption_post_process(line[2])],  
+                    'captions': [caption_post_process(lines.iloc[i][2])],  
                     'split': split,
                     'modifiable': False,
                 }
+            # for line in lines:
+            #     # 此处应该是'\t'
+            #     # 并且captions处貌似应该使用split(' ')   
+            #     # 不用split()， 直接调用的get_different_word里面会有用split()
+            #     line = line.split('\t')
+            #     img = {
+            #         'file_path': line[0],
+            #         'detection_score': line[1],
+            #         # captions是指图像的属性，即图像说明文字
+            #         # 这里有 hervé léger 这样的字体 要注意字符解码，会不会在上面readlines()就需要进行？
+            #         'captions': [caption_post_process(line[2])],  
+            #         'split': split,
+            #         'modifiable': False,
+            #     }
                 self.imgs += [img]
         print('Fashion200k: ', len(self.imgs), 'images')
 
@@ -131,7 +141,7 @@ class Fashion200k(BaseDataset):
             source_file, target_file = line.split()
             idx = file2imgid[source_file]
             target_idx = file2imgid[target_file]
-            source_caption = self.imgs[dix]['captions'][0]
+            source_caption = self.imgs[idx]['captions'][0]
             target_caption = self.imgs[target_idx]['captions'][0]
             source_word, target_word, mod_str = self.get_different_word(
                 source_caption, target_caption)
@@ -152,14 +162,14 @@ class Fashion200k(BaseDataset):
         id2caption = {}
         caption2imgids = {}
         for i, img in enumerate(self.imgs):
-            for c in img['caption']:
+            for c in img['captions']:
                 if c not in caption2id:
                     id2caption[len(caption2id)] = c
                     caption2id[c] = len(caption2id)
                     caption2imgids[c] = []
                 caption2imgids[c].append(i)
             self.caption2imgids = caption2imgids
-            print(len(caption2imgids), 'unique cations')
+            print(len(caption2imgids), 'unique captions')
 
         # parent captions are 1-word shorter than their children
         # 产生父词，即只比子词少一个单词
