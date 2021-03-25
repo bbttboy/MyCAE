@@ -11,6 +11,7 @@ from tensorboardX import SummaryWriter
 from torch.autograd import Variable
 import test_retrieval
 import torch
+import torchvision
 from tqdm import tqdm
 from copy import deepcopy
 import socket
@@ -23,22 +24,22 @@ def parse_opt():
     """Parses the input arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', type=str, default='')
-    parser.add_argument('--comment', type=str)
-    parser.add_argument('--dataset', type=str)
-    parser.add_argument('--dataset_path', type=str)
+    parser.add_argument('--comment', type=str,default='fashion200k_composeAE')
+    parser.add_argument('--dataset', type=str, default='fashion200k')
+    parser.add_argument('--dataset_path', type=str, default=r'D:/DataSet/fashion-200k/')
     parser.add_argument('--model', type=str, default='composeAE')
     parser.add_argument('--image_embed_dim', type=int, default=512)
-    parser.add_argument('--use_bert', type=bool, default=False)
-    parser.add_argument('--use_complete_text_query', type=bool, default=False)
+    parser.add_argument('--use_bert', type=bool, default=True)
+    parser.add_argument('--use_complete_text_query', type=bool, default=True)
     parser.add_argument('--learning_rate', type=float, default=1e-2)
-    parser.add_argument('--learning_rate_decay_frequency', type=int, default=9999999)
+    parser.add_argument('--learning_rate_decay_frequency', type=int, default=50000)
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--weight_dacay', type=float, default=1e-6)
+    parser.add_argument('--weight_decay', type=float, default=5e-5)
     parser.add_argument('--category_to_train', type=str, default='all')
     parser.add_argument('--num_iters', type=int, default=160000)
     parser.add_argument('--loss', type=str, default='soft_triplet')
     parser.add_argument('--loader_num_workers', type=int, default=4)
-    parser.add_argument('--log_dir', type=str, default='../logs/')  # ../是上级目录
+    parser.add_argument('--log_dir', type=str, default='./logs/fashion200k/')  # ../是上级目录
     parser.add_argument('--test_only', type=bool, default=False)
     parser.add_argument('--model_checkpoint', type=str, default='')
 
@@ -202,7 +203,7 @@ def train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer):
             img2 = torch.autograd.Variable(img2).cuda()
 
             if opt.use_complete_text_query:
-                if opt.dataset = 'mitstates':
+                if opt.dataset == 'mitstates':
                     supp_text = [str(d['noun']) for d in data]
                     mods = [str(d['mod']['str']) for d in data]
                     # text_query here means complete_text_query
@@ -307,5 +308,8 @@ def main():
             print('    ', metric_name, round(metric_value, 4))
         
         return 0
-    train_loop(opt, loss_weights, logger, trainset， testset, model, optimizer)
+    train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer)
     logger.close()
+
+if __name__=="__main__":
+    main()
