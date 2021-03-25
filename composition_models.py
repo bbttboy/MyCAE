@@ -6,10 +6,11 @@ import torchvision
 import torch.nn.functional as F
 import text_model
 import torch_functions
-from bert_serving.client import BertClient
+# from bert_serving.client import BertClient
+from bert_dic import MyBertDic
 from torch.autograd import Variable
 
-bc = BertClient()
+# bc = BertClient()
 
 
 class ImgTextCompositionBase(torch.nn.Module):
@@ -123,11 +124,14 @@ class ImgEncoderTextEncoderBase(ImgTextCompositionBase):
 
         # text model
         # 一般没用自写的TextModel，一般还是用bert
-        if not use_bert:
+        if use_bert:
+            self.text_model = MyBertDic()
+        else:
             self.text_model = text_model.TextLSTMModel(
                 texts_to_build_vocab=text_query,
                 word_embed_dim=text_embed_dim,
                 lstm_hidden_dim=text_embed_dim)
+        
 
     def extract_img_feature(self, imgs):
         """
@@ -140,8 +144,10 @@ class ImgEncoderTextEncoderBase(ImgTextCompositionBase):
         对应 q = Beta(t), t --> text
         """
         if use_bert:
-            text_features = bc.encode(text_query)
+            text_features = self.text_model.encode(text_query)
             return torch.from_numpy(text_features).cuda()
+            # text_features = bc.encode(text_query)
+            # return torch.from_numpy(text_features).cuda()
         return self.text_model(text_query)
 
 
