@@ -9,7 +9,7 @@ import torch.utils.data
 import torchvision
 import random
 import warnings
-import pandas as pd
+# import pandas as pd
 
 class BaseDataset(torch.utils.data.Dataset):
     """Base class for a dataset."""
@@ -80,31 +80,33 @@ class Fashion200k(BaseDataset):
         
         for filename in label_files:
             print('read: ' + filename)
-            lines = pd.read_table(join(label_path, filename), header=None)
-            for i in range(len(lines)):
-                img = {
-                    'file_path': lines.iloc[i][0],
-                    'detection_score': lines.iloc[i][1],
-                    # captions是指图像的属性，即图像说明文字
-                    # 这里有 hervé léger 这样的字体 要注意字符解码，会不会在上面readlines()就需要进行？
-                    'captions': [caption_post_process(lines.iloc[i][2])],  
-                    'split': split,
-                    'modifiable': False,
-                }
-            # for line in lines:
-            #     # 此处应该是'\t'
-            #     # 并且captions处貌似应该使用split(' ')   
-            #     # 不用split()， 直接调用的get_different_word里面会有用split()
-            #     line = line.split('\t')
+            # lines = pd.read_table(join(label_path, filename), header=None)
+            # for i in range(len(lines)):
             #     img = {
-            #         'file_path': line[0],
-            #         'detection_score': line[1],
+            #         'file_path': lines.iloc[i][0],
+            #         'detection_score': lines.iloc[i][1],
             #         # captions是指图像的属性，即图像说明文字
             #         # 这里有 hervé léger 这样的字体 要注意字符解码，会不会在上面readlines()就需要进行？
-            #         'captions': [caption_post_process(line[2])],  
+            #         'captions': [caption_post_process(lines.iloc[i][2])],  
             #         'split': split,
             #         'modifiable': False,
             #     }
+            with open(join(label_path, filename), 'r', encoding='UTF-8') as f:
+                lines = f.readlines()
+            for line in lines:
+                # 此处应该是'\t'
+                # 并且captions处貌似应该使用split(' ')   
+                # 不用split()， 直接调用的get_different_word里面会有用split()
+                line = line.split('\t')
+                img = {
+                    'file_path': line[0],
+                    'detection_score': line[1],
+                    # captions是指图像的属性，即图像说明文字
+                    # 这里有 hervé léger 这样的字体 要注意字符解码，会不会在上面readlines()就需要进行？
+                    'captions': [caption_post_process(line[2])],  
+                    'split': split,
+                    'modifiable': False,
+                }
                 self.imgs += [img]
         print('Fashion200k: ', len(self.imgs), 'images')
 
@@ -133,7 +135,7 @@ class Fashion200k(BaseDataset):
         for i, img in enumerate(self.imgs):
             file2imgid[img['file_path']] = i
         # test_quries.txt 里面每一行存储应该的是源图片路径和对应目标图片路径
-        with open(self.img_path + '/test_queries.txt') as f:
+        with open(self.img_path + '/test_queries.txt', 'r', encoding='UTF-8') as f:
             lines = f.readlines()
         self.test_queries = []
         for line in lines:
@@ -168,8 +170,8 @@ class Fashion200k(BaseDataset):
                     caption2id[c] = len(caption2id)
                     caption2imgids[c] = []
                 caption2imgids[c].append(i)
-            self.caption2imgids = caption2imgids
-            print(len(caption2imgids), 'unique captions')
+        self.caption2imgids = caption2imgids
+        print(len(caption2imgids), 'unique captions')
 
         # parent captions are 1-word shorter than their children
         # 产生父词，即只比子词少一个单词
@@ -223,7 +225,7 @@ class Fashion200k(BaseDataset):
 
         # find the word difference between query and target (not in parent caption)
         source_caption = self.imgs[idx]['captions'][0]
-        target_caption = self.imgs[target_idx]['caption'][0]
+        target_caption = self.imgs[target_idx]['captions'][0]
         # 这样选出来的图片描述就只会有一个单词的差异
         source_word, target_word, mod_str = self.get_different_word(
             source_caption, target_caption)
@@ -253,7 +255,7 @@ class Fashion200k(BaseDataset):
         return out
 
     def get_img(self, idx, raw_img=False):
-        imp_path = self.img_path + self.imgs[idx]['file_path']
+        img_path = self.img_path + self.imgs[idx]['file_path']
         with open(img_path, 'rb') as f:
             img = PIL.Image.open(f)
             img = img.convert('RGB')
