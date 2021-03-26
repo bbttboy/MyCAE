@@ -18,8 +18,7 @@ class ImgTextCompositionBase(torch.nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.normalization_layer = torch_functions.NormalizationLayer(
-            normalize_scale=4.0, learn_scale=True)
+        self.normalization_layer = torch_functions.NormalizationLayer(normalize_scale=4.0, learn_scale=True)
         self.soft_triplet_loss = torch_functions.TripletLoss()
         # self.name = 'model_name'
 
@@ -108,6 +107,7 @@ class ImgEncoderTextEncoderBase(ImgTextCompositionBase):
         # img model
         # pretrained表示是否是预训练模型
         img_model = torchvision.models.resnet18(pretrained=True)
+        self.name = name
         
         class GlobalAvgPool2d(torch.nn.Module):
             def forward(self, x):
@@ -132,7 +132,6 @@ class ImgEncoderTextEncoderBase(ImgTextCompositionBase):
                 word_embed_dim=text_embed_dim,
                 lstm_hidden_dim=text_embed_dim)
         
-
     def extract_img_feature(self, imgs):
         """
         对应 z = Psi(x), x -- > image
@@ -148,7 +147,8 @@ class ImgEncoderTextEncoderBase(ImgTextCompositionBase):
             return torch.from_numpy(text_features).cuda()
             # text_features = bc.encode(text_query)
             # return torch.from_numpy(text_features).cuda()
-        return self.text_model(text_query)
+        else:
+            return self.text_model(text_query)
 
 
 class ComplexProjectionModule(torch.nn.Module):
