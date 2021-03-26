@@ -38,7 +38,7 @@ def parse_opt():
     parser.add_argument('--category_to_train', type=str, default='all')
     parser.add_argument('--num_iters', type=int, default=160000)
     parser.add_argument('--loss', type=str, default='soft_triplet')
-    parser.add_argument('--loader_num_workers', type=int, default=4)
+    parser.add_argument('--loader_num_workers', type=int, default=0)
     parser.add_argument('--log_dir', type=str, default='./logs/fashion200k/')  # ../是上级目录
     parser.add_argument('--test_only', type=bool, default=False)
     parser.add_argument('--model_checkpoint', type=str, default='')
