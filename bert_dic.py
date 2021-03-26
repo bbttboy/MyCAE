@@ -9,8 +9,8 @@ class MyBertDic():
             self.dic[self.data.iloc[i][0]] = self.data.iloc[i][1:].to_numpy(dtype='float32')
 
     def encode(self, text):
-        self.features = []
+        features = []
         for t in text:
-            self.features.append(self.dic[t])
-        self.features_np = np.stack(self.features)
+            features.append(self.dic[t])
+        self.features_np = np.stack(features)
         return self.features_np
