@@ -37,9 +37,12 @@ class MyTripletLossFunc(torch.autograd.Function):
         self.triplets = triplets
         self.triplet_count = len(triplets)
     
+    @staticmethod
     def forward(self, features):
         self.save_for_backward(features)
 
+        print('------------', type(features), '\n')
+        print(features)
         self.distances = pairwise_distances(features).cpu().numpy()
 
         loss = 0.0
@@ -54,7 +57,8 @@ class MyTripletLossFunc(torch.autograd.Function):
         
         loss /= triplet_count
         return torch.FloatTensor((loss, ))
-        
+
+    @staticmethod    
     def backward(self, grad_output):
         features, = self.save_tensors
         features_np = features.cpu().numpy()
@@ -84,7 +88,7 @@ class TripletLoss(torch.nn.Module):
     def forward(self, x, triplets):
         if self.pre_layer is not None:
             x = self.pre_layer(x)
-        loss = MyTripletLossFunc(triplets)(x)
+        loss = MyTripletLossFunc.apply(triplets)(x)
         return loss
 
 
@@ -98,10 +102,10 @@ class NormalizationLayer(torch.nn.Module):
         if learn_scale:
             self.norm_s = torch.nn.Parameter(torch.FloatTensor((self.norm_s, )))
 
-        def forward(self, x):
-            # torch.norm中，'p'表示范数形式，不设置p表示默认为2范数
-            # dim表示在哪个维度上进行计算，例如shape=(2,4)在dim=1上进行计算，输出是一个(2)的形式
-            # keepdim=True表示维持原有Shape的形态，同上，输出是一个(2,1)的形式，如果在dim=0上计算，输出是(1,4)形式
-            # expand_as(x)表示对tensor进行广播扩充成同x的形式，即把(2,1)或(1,4)广播扩充成(2,4)
-            features = self.norm_s * x / torch.norm(x, dim=1, keepdim=True).expand_as(x)
-            return features
+    def forward(self, x):
+        # torch.norm中，'p'表示范数形式，不设置p表示默认为2范数
+        # dim表示在哪个维度上进行计算，例如shape=(2,4)在dim=1上进行计算，输出是一个(2)的形式
+        # keepdim=True表示维持原有Shape的形态，同上，输出是一个(2,1)的形式，如果在dim=0上计算，输出是(1,4)形式
+        # expand_as(x)表示对tensor进行广播扩充成同x的形式，即把(2,1)或(1,4)广播扩充成(2,4)
+        features = self.norm_s * x / torch.norm(x, dim=1, keepdim=True).expand_as(x)
+        return features
