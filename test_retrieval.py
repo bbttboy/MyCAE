@@ -70,7 +70,7 @@ def test(opt, model, testset):
                 all_imgs += [imgs]
                 imgs = []
         all_imgs = np.concatenate(all_imgs)
-        all_captions = [img['caption'][0] for img in testset.imgs]
+        all_captions = [img['captions'][0] for img in testset.imgs]
     
     else:
         # use training queries to approximate training retrieval performance
@@ -129,7 +129,7 @@ def test(opt, model, testset):
         for i, nns in enumerate(nn_result):
             if all_target_captions[i] in nns[:k]:
                 r += 1
-            r /= len(nn_result)
-            out += [('recall_top' + str(k) + '_correct_composition', r)]
+        r /= len(nn_result)
+        out += [('recall_top' + str(k) + '_correct_composition', r)]
 
     return out
