@@ -160,6 +160,8 @@ class Fashion200k(BaseDataset):
         # index caption 2 caption_id and caption 2 image_ids
         # 因为图片说明有许多重复的
         # 所以给不同的图片说明编号，并将相同图片说明对应的imgid放入对应的列表
+        # id从0开始
+        # 只是train中的图片
         caption2id = {}
         id2caption = {}
         caption2imgids = {}
@@ -171,7 +173,7 @@ class Fashion200k(BaseDataset):
                     caption2imgids[c] = []
                 caption2imgids[c].append(i)
         self.caption2imgids = caption2imgids
-        print(len(caption2imgids), 'unique captions')
+        print(len(caption2imgids), 'unique captions.')
 
         # parent captions are 1-word shorter than their children
         # 产生父词，即只比子词少一个单词
@@ -182,11 +184,14 @@ class Fashion200k(BaseDataset):
                 p = c.replace(w, '')
                 # 考虑多个空格时 该句会有问题， 试一试 ' '.join(p.split()).strip()
                 p = p.replace('  ', ' ').strip()
+                # p是去掉一个属性的父词
                 if p not in parent2children_captions:
                     parent2children_captions[p] = []
+                # c是该子词，即比p仅多一个属性
                 if c not in parent2children_captions[p]:
                     parent2children_captions[p].append(c)
         self.parent2children_captions = parent2children_captions
+        print(len(parent2children_captions), 'parent capions.')
 
         # identify parent captions for each image
         for img in self.imgs:
@@ -194,9 +199,9 @@ class Fashion200k(BaseDataset):
             # 父词列表 --> 键值对
             img['parent_captions'] = []
         # 为每个img字典对象中添加其可以对应的父词
-        for p in parent2children_captions:
+        for p in parent2children_captions:  # p是父词
             if len(parent2children_captions[p]) >= 2:  # 子词至少有2个，即可以进行修改
-                for c in parent2children_captions[p]:  # c 是 父词p 对应的子词
+                for c in parent2children_captions[p]:
                     for imgid in caption2imgids[c]:
                         self.imgs[imgid]['modifiable'] = True
                         self.imgs[imgid]['parent_captions'] += [p]
@@ -209,7 +214,7 @@ class Fashion200k(BaseDataset):
         print('Modifiable images ', num_modifiable_imgs)
     
     def caption_index_sample_(self, idx):
-        # 此处为True的话，说明对应的每个父词都至少有两个及以上的子词
+        # 当输入idx不是可修改，则随机一个可修改的
         while not self.imgs[idx]['modifiable']:
             idx = np.random.randint(0, len(self.imgs))
 
