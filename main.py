@@ -33,13 +33,13 @@ def parse_opt():
     parser.add_argument('--use_complete_text_query', type=bool, default=True)
     parser.add_argument('--learning_rate', type=float, default=1e-2)
     parser.add_argument('--learning_rate_decay_frequency', type=int, default=50000)
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--weight_decay', type=float, default=5e-5)
     parser.add_argument('--category_to_train', type=str, default='all')
     parser.add_argument('--num_iters', type=int, default=160000)
     parser.add_argument('--loss', type=str, default='soft_triplet')
     parser.add_argument('--loader_num_workers', type=int, default=0)
-    parser.add_argument('--log_dir', type=str, default='./logs/fashion200k/')  # ../是上级目录
+    parser.add_argument('--log_dir', type=str, default='d:/GitHub/MyCAE/logs/fashion200k/')  # ../是上级目录
     parser.add_argument('--test_only', type=bool, default=False)
     parser.add_argument('--model_checkpoint', type=str, default='')
 
@@ -131,6 +131,8 @@ def create_model_and_optimizer(opt, texts):
     optimizer = torch.optim.SGD(params, lr=opt.learning_rate, momentum=0.9, weight_decay=opt.weight_decay)
     return model, optimizer
 
+
+
 def train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer):
     """Function for train loop"""
     print('Begin training.')
@@ -168,6 +170,7 @@ def train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer):
         # test
         if epoch % 3 == 1:
             tests = []
+            print('Begain testing.')
             for name, dataset in [('train', trainset), ('test', testset)]:
                 t = test_retrieval.test(opt, model, dataset)
                 tests += [(name + ' ' + metric_name, metric_value) 
@@ -191,7 +194,7 @@ def train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer):
             shuffle=True,
             drop_last=True,
             num_workers=opt.loader_num_workers)
-        
+
         def training_1_iter(data):
             assert type(data) is list
             img1 = np.stack([d['source_img_data'] for d in data])
@@ -272,7 +275,7 @@ def train_loop(opt, loss_weights, logger, trainset, testset, model, optimizer):
                 for g in optimizer.param_groups:
                     g['lr'] *= 0.1
 
-    print('Finished training.')
+        print('Finished training.')
 
 
 def main():
