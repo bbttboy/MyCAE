@@ -55,7 +55,7 @@ class ImgTextCompositionBase(torch.nn.Module):
         # 此处的name取自子类
         if self.name == 'composeAE':
             # conjugate --> 共轭
-            CONJUGATE = Variable(torch.cuda.FloatTensor(32, 1).fill_(-1.0), requires_grad=False)
+            CONJUGATE = Variable(torch.cuda.FloatTensor(128, 1).fill_(-1.0), requires_grad=False)
             conjugate_representations = self.compose_img_text_features(target_img_features_non_norm, 
                                             dct_with_representations["text_features"],
                                             CONJUGATE)
@@ -80,19 +80,20 @@ class ImgTextCompositionBase(torch.nn.Module):
                 dct_with_representations
     
     def compute_soft_triplet_loss_(self, mod_img1, img2):
-        triplets = []
-        labels = list(range(mod_img1.shape[0])) + list(range(img2.shape[0]))
-        for i in range(len(labels)):
-            triplets_i = []
-            for j in range(len(labels)):
-                if labels[i] == labels[j] and i != j:
-                    for k in range(len(labels)):
-                        if labels[i] != labels[k]:
-                            triplets_i.append([i, j, k])
-            np.random.shuffle(triplets_i)
-            triplets += triplets_i[:3]
-        assert (triplets and len(triplets) < 2000)
-        return self.soft_triplet_loss(torch.cat([mod_img1, img2]), triplets)
+        # triplets = []
+        # # shape[0] = BatchSize
+        # labels = list(range(mod_img1.shape[0])) + list(range(img2.shape[0]))
+        # for i in range(len(labels)):
+        #     triplets_i = []
+        #     for j in range(len(labels)):
+        #         if labels[i] == labels[j] and i != j:
+        #             for k in range(len(labels)):
+        #                 if labels[i] != labels[k]:
+        #                     triplets_i.append([i, j, k])
+        #     np.random.shuffle(triplets_i)
+        #     triplets += triplets_i[:3]
+        # assert (triplets and len(triplets) < 2000)
+        return self.soft_triplet_loss(torch.cat([mod_img1, img2]))
 
     def compute_batch_based_classification_loss_(self, mod_img1, img2):
         x = torch.mm(mod_img1, img2.transpose(0, 1))
@@ -314,7 +315,7 @@ class ComposeAE(ImgEncoderTextEncoderBase):
         return self.compose_img_text_features(img_features, text_features)
 
     def compose_img_text_features(self, img_features, text_features, 
-                                    CONJUGATE=Variable(torch.cuda.FloatTensor(32, 1).fill_(1.0), requires_grad=False),):
+                                    CONJUGATE=Variable(torch.cuda.FloatTensor(128, 1).fill_(1.0), requires_grad=False),):
         """
         即对应 Theta = f(z, q) = a * Rho(Phi) + b * Rho_conv(Phi, z, q)
         """
