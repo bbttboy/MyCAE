@@ -32,6 +32,74 @@ def pairwise_distances(x, y=None):
 
 class MyTripletLossFunc(torch.autograd.Function):
 
+    @staticmethod
+    def random_triplets(features):
+        size = features.shape[0]
+
+        triplets = []
+        labels = list(range(int(size / 2))) + list(range(int(size / 2)))
+        for i in range(len(labels)):
+            triplets_i = []
+            for j in range(len(labels)):
+                if labels[i] == labels[j] and i != j:
+                    for k in range(len(labels)):
+                        if labels[i] != labels[k]:
+                            triplets_i.append([i, j, k])
+            np.random.shuffle(triplets_i)
+            triplets += triplets_i[:3]
+        assert (triplets and len(triplets) < 2000)
+        return triplets
+
+    @staticmethod
+    def forward(ctx, features):
+
+        distances = pairwise_distances(features).cpu().numpy()
+        triplets = MyTripletLossFunc.random_triplets(features)
+    
+        loss = 0.0
+        triplet_count = 0.0
+        correct_count = 0.0
+        for i, j, k in triplets:
+            w = 1.0
+            triplet_count += w
+            loss += w * np.log(1 + np.exp(distances[i, j] - distances[i, k]))
+            if distances[i, j] < distances[i, k]:
+                correct_count += 1
+        
+        loss /= triplet_count
+
+        triplet_count = torch.autograd.Variable(torch.FloatTensor([triplet_count]))
+        distances = torch.autograd.Variable(torch.FloatTensor(distances))
+        triplets = torch.autograd.Variable(torch.FloatTensor(triplets))
+        ctx.save_for_backward(features, triplets, triplet_count, distances)
+
+        return torch.FloatTensor((loss,))
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        features, triplets, triplet_count, distances = ctx.saved_tensors
+        features_np = features.cpu().numpy()
+        grad_features = features.clone() * 0.0
+        grad_features_np = grad_features.cpu().numpy()
+
+        for i, j, k in triplets:
+            i = int(i.item())
+            j = int(j.item())
+            k = int(k.item())
+            w = 1.0
+            f = 1.0 - 1.0 / (1.0 + np.exp(distances[i, j] - distances[i, k]))
+            grad_features_np[i, :] += (w * f * (features_np[i, :] - features_np[j, :]) / triplet_count).numpy()
+            grad_features_np[j, :] += (w * f * (features_np[j, :] - features_np[i, :]) / triplet_count).numpy()
+            grad_features_np[i, :] += (-w * f * (features_np[i, :] - features_np[k, :]) / triplet_count).numpy()
+            grad_features_np[k, :] += (-w * f * (features_np[k, :] - features_np[i, :]) / triplet_count).numpy()
+        
+        for i in range(features_np.shape[0]):
+            grad_features[i, :] = torch.from_numpy(grad_features_np[i, :])
+        grad_features *= float(grad_output.data[0])
+        return grad_features
+
+class MyTripletLossFunc_(torch.autograd.Function):
+
     def __init__(self, triplets):
         super(MyTripletLossFunc, self).__init__()
         self.triplets = triplets
@@ -43,6 +111,9 @@ class MyTripletLossFunc(torch.autograd.Function):
 
         print('------------', type(features), '\n')
         print(features)
+        print('-----------------------', type(self.triplets), '\n')
+        print(self.triplets)
+
         self.distances = pairwise_distances(features).cpu().numpy()
 
         loss = 0.0
@@ -50,7 +121,7 @@ class MyTripletLossFunc(torch.autograd.Function):
         correct_count = 0.0
         for i, j, k in self.triplets:
             w = 1.0
-            triplet_count += 2
+            triplet_count += w
             loss += w * np.log(1 + np.exp(self.distances[i, j] - self.distances[i, k]))
             if self.distances[i, j] < self.distances[i, k]:
                 correct_count += 1
@@ -85,10 +156,10 @@ class TripletLoss(torch.nn.Module):
         super(TripletLoss, self).__init__()
         self.pre_layer = pre_layer
 
-    def forward(self, x, triplets):
+    def forward(self, x):
         if self.pre_layer is not None:
             x = self.pre_layer(x)
-        loss = MyTripletLossFunc.apply(triplets)(x)
+        loss = MyTripletLossFunc.apply(x)
         return loss
 
 
